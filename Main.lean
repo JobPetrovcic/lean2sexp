@@ -1,5 +1,5 @@
+import «Lean2sexp».Sexp
 import Lean
-import Sexp
 
 structure Config : Type where
   srcDir : System.FilePath := "build/lib" -- the directory where .olean files are found
