@@ -2,7 +2,7 @@ import Lake
 open Lake DSL
 
 package «lean2sexp» where
-  -- add package configuration options here
+  moreLeanArgs := #["-DautoImplicit=false"]
 
 lean_lib «Lean2sexp» where
   -- add library configuration options here
