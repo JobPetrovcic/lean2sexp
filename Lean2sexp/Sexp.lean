@@ -260,7 +260,7 @@ def Sexp.constantInfo (exprCollect : Lean.Expr → Sexp) (info : Lean.ConstantIn
       | .recInfo val => constr "recursor" [exprCollect val.type]
 
 def Sexp.fromModuleData (refsOnly : Bool) (nm : Lean.Name) (data : Lean.ModuleData) : Sexp :=
-  let ost := Sexp.string (String.intercalate "; " (data.imports.toList.map (fun s ↦ s.module.toString)))
+  let ost := Sexp.string (String.intercalate "; " (data.constNames.toList.map (fun s ↦ s.toString)))
   --let ost := Sexp.string (String.intercalate "; " (data.extraConstNames.toList.map (fun s ↦ s.toString)))
   let lst := data.constants.toList.filter keepEntry
   let moduleBody := lst.map (constantInfo $ if refsOnly then fromExprRefs else fromExpr)
