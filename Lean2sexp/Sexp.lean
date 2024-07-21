@@ -63,9 +63,14 @@ instance: Sexpable UInt64 where
 instance: Sexpable Float where
   toSexp := .double
 
-def Sexp.getFullName : Lean.Name → String := (Lean.Name.toStringWithSep "." false)
+/-def Sexp.getFullName : Lean.Name → String := (Lean.Name.toStringWithSep "." false)-/
 
-def Sexp.fromName (n : Lean.Name) : Sexp := constr "name" [toSexp ( Sexp.getFullName n)]
+def Sexp.getFullName (sep : String) : Lean.Name → String
+| .anonymous       => "[anonymous]"
+| .str n s         => (Sexp.getFullName sep n) ++ sep ++ s
+| .num n v         => (Sexp.getFullName sep n) ++ sep ++ Nat.repr v
+
+def Sexp.fromName (n : Lean.Name) : Sexp := constr "name" [toSexp ( "start:" ++ Sexp.getFullName "." n)]
 
 instance: Sexpable Lean.Name where
   toSexp := Sexp.fromName
