@@ -4,7 +4,7 @@ import Lean
 structure Config : Type where
   srcDir : System.FilePath := ".lake/build/lib" -- the directory where .olean files are found
   outDir : System.FilePath := "sexp" -- the output directory (created if needed)
-  refsOnly : Bool := False -- only output references names
+  refsOnly : Bool := true -- only output references names
   force : Bool := False -- process file even if .sexp is newer than .olean
 
 def usage : String :=
