@@ -1,4 +1,5 @@
 import Lean
+import Init.Meta
 
 inductive Sexp : Type
 | atom : String → Sexp
@@ -62,7 +63,9 @@ instance: Sexpable UInt64 where
 instance: Sexpable Float where
   toSexp := .double
 
-def Sexp.fromName (n : Lean.Name) : Sexp := constr "name" [toSexp n.toString]
+def Sexp.getFullName : Lean.Name → String := Lean.Name.toStringWithSep "." false
+
+def Sexp.fromName (n : Lean.Name) : Sexp := constr "name" [toSexp ( Sexp.getFullName n)]
 
 instance: Sexpable Lean.Name where
   toSexp := Sexp.fromName
