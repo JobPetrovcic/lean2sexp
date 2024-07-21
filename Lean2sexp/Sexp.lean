@@ -259,8 +259,9 @@ def Sexp.constantInfo (exprCollect : Lean.Expr → Sexp) (info : Lean.ConstantIn
       | .ctorInfo val => constr "constructor" [toSexp val.induct]
       | .recInfo val => constr "recursor" [exprCollect val.type]
 
-unsafe def Sexp.fromModuleData (refsOnly : Bool) (nm : Lean.Name) (data : Lean.ModuleData) : Sexp :=
-  let ost := Sexp.string (String.intercalate "; " (data.extraConstNames.toList.map (fun s ↦ s.toString)))
+def Sexp.fromModuleData (refsOnly : Bool) (nm : Lean.Name) (data : Lean.ModuleData) : Sexp :=
+  let ost := Sexp.string (String.intercalate "; " (data.entries.toList.map (fun s ↦ s.1.toString)))
+  --let ost := Sexp.string (String.intercalate "; " (data.extraConstNames.toList.map (fun s ↦ s.toString)))
   let lst := data.constants.toList.filter keepEntry
   let moduleBody := lst.map (constantInfo $ if refsOnly then fromExprRefs else fromExpr)
   Sexp.cons (ost :: (constr "module" $ constr "module-name" [toSexp nm] :: moduleBody):: [])
