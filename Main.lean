@@ -1,49 +1,6 @@
 import «Lean2sexp».Sexp
 import Lean
 import Lean.Environment
-/--import Lean.Util
-import Lean.Data.HashMap
-import Lean.ImportingFlag
-import Lean.Data.SMap
-import Lean.Declaration
-import Lean.LocalContext
-import Lean.Util.Path
-import Lean.Util.FindExpr
-import Lean.Util.Profile
-import Lean.Util.InstantiateLevelParams--/
-
---open Lean
-/--unsafe def finalizeImportHacked (s : ImportState) (imports : Array Import) (opts : Options) (trustLevel : UInt32 := 0)
-    (leakEnv := false) : IO (HashMap Name Name) := do
-  IO.println "hello"
-  let numConsts := s.moduleData.foldl (init := 0) fun numConsts mod =>
-    numConsts + mod.constants.size + mod.extraConstNames.size
-  let mut constantMapModule : HashMap Name Name := mkHashMap (capacity := numConsts)
-  IO.println s!"{s.moduleData.size}"
-  IO.println s!"{s.moduleNames.size}"
-  for h:modIdx in [0:s.moduleData.size] do
-    let modName := s.moduleNames[modIdx]!
-    let mod := s.moduleData[modIdx]'h.upper
-    IO.println s!"{modName}"
-    --for cname in mod.constNames, cinfo in mod.constants do
-      --constantMapModule := constantMapModule.insertIfNew cname modName |>.1
-  pure constantMapModule
-
-unsafe def importModulesHacked (imports : Array Import) (opts : Options) (trustLevel : UInt32 := 0)
-    (leakEnv := false) : IO (HashMap Name Name) := do
-  for imp in imports do
-    IO.println s!"{imp.module}"
-    if imp.module matches .anonymous then
-      throw <| IO.userError "import failed, trying to import module with anonymous name"
-  IO.println "Finished reading modules"
-  withImporting do
-    let (_, s) ← importModulesCore imports |>.run
-    IO.println "Finished importModulesCore modules"
-    finalizeImportHacked (leakEnv := leakEnv) s imports opts trustLevel
-
-unsafe def withImportModules {α : Type} (imports : Array Import) (opts : Options) (trustLevel : UInt32 := 0) (act : Environment → IO α) : IO α := do
-  let env ← importModules imports opts trustLevel
-  try act env finally env.freeRegions--/
 
 structure Config : Type where
   srcDir : System.FilePath := ".lake/build/lib" -- the directory where .olean files are found
