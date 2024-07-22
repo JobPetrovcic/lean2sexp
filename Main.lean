@@ -15,6 +15,7 @@ import Lean.Util.InstantiateLevelParams
 open Lean
 unsafe def finalizeImportHacked (s : ImportState) (imports : Array Import) (opts : Options) (trustLevel : UInt32 := 0)
     (leakEnv := false) : IO (HashMap Name Name) := do
+  IO.println "hello"
   let numConsts := s.moduleData.foldl (init := 0) fun numConsts mod =>
     numConsts + mod.constants.size + mod.extraConstNames.size
   let mut constantMapModule : HashMap Name Name := mkHashMap (capacity := numConsts)
