@@ -1,7 +1,7 @@
 import «Lean2sexp».Sexp
 import Lean
 import Lean.Environment
-import Lean.Util
+/--import Lean.Util
 import Lean.Data.HashMap
 import Lean.ImportingFlag
 import Lean.Data.SMap
@@ -10,10 +10,10 @@ import Lean.LocalContext
 import Lean.Util.Path
 import Lean.Util.FindExpr
 import Lean.Util.Profile
-import Lean.Util.InstantiateLevelParams
+import Lean.Util.InstantiateLevelParams--/
 
-open Lean
-unsafe def finalizeImportHacked (s : ImportState) (imports : Array Import) (opts : Options) (trustLevel : UInt32 := 0)
+--open Lean
+/--unsafe def finalizeImportHacked (s : ImportState) (imports : Array Import) (opts : Options) (trustLevel : UInt32 := 0)
     (leakEnv := false) : IO (HashMap Name Name) := do
   IO.println "hello"
   let numConsts := s.moduleData.foldl (init := 0) fun numConsts mod =>
@@ -43,7 +43,7 @@ unsafe def importModulesHacked (imports : Array Import) (opts : Options) (trustL
 
 unsafe def withImportModules {α : Type} (imports : Array Import) (opts : Options) (trustLevel : UInt32 := 0) (act : Environment → IO α) : IO α := do
   let env ← importModules imports opts trustLevel
-  try act env finally env.freeRegions
+  try act env finally env.freeRegions--/
 
 structure Config : Type where
   srcDir : System.FilePath := ".lake/build/lib" -- the directory where .olean files are found
@@ -97,7 +97,7 @@ unsafe def main (args : List String) : IO Unit := do
         else
           IO.println s!"[{k}/{totalFiles}] PROCESSING {srcFile} → {outFile}"
           let (data, region) ← Lean.readModuleData srcFile
-          let constModMap ← importModules data.imports Lean.Options.empty
+          let constModMap ← Lean.importModules data.imports Lean.Options.empty
           let moduleName := baseName.foldl Lean.Name.str Lean.Name.anonymous
           IO.FS.withFile outFile .write (fun fh => Sexp.write fh $ Sexp.fromModuleData conf.refsOnly moduleName data)
           region.free
