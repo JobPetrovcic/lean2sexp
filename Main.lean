@@ -41,6 +41,10 @@ unsafe def importModulesHacked (imports : Array Import) (opts : Options) (trustL
     IO.println "Finished importModulesCore modules"
     finalizeImportHacked (leakEnv := leakEnv) s imports opts trustLevel
 
+unsafe def withImportModules {α : Type} (imports : Array Import) (opts : Options) (trustLevel : UInt32 := 0) (act : Environment → IO α) : IO α := do
+  let env ← importModules imports opts trustLevel
+  try act env finally env.freeRegions
+
 structure Config : Type where
   srcDir : System.FilePath := ".lake/build/lib" -- the directory where .olean files are found
   outDir : System.FilePath := "sexp" -- the output directory (created if needed)
@@ -93,7 +97,7 @@ unsafe def main (args : List String) : IO Unit := do
         else
           IO.println s!"[{k}/{totalFiles}] PROCESSING {srcFile} → {outFile}"
           let (data, region) ← Lean.readModuleData srcFile
-          let constModMap ← importModulesHacked data.imports Lean.Options.empty
+          let constModMap ← importModules data.imports Lean.Options.empty
           let moduleName := baseName.foldl Lean.Name.str Lean.Name.anonymous
           IO.FS.withFile outFile .write (fun fh => Sexp.write fh $ Sexp.fromModuleData conf.refsOnly moduleName data)
           region.free
