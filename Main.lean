@@ -1,5 +1,29 @@
 import «Lean2sexp».Sexp
 import Lean
+import Lean.Environment
+import Lean.Util
+
+open Lean
+unsafe def finalizeImportHacked (s : ImportState) (imports : Array Import) (opts : Options) (trustLevel : UInt32 := 0)
+    (leakEnv := false) : IO (HashMap Name Name) := do
+  let numConsts := s.moduleData.foldl (init := 0) fun numConsts mod =>
+    numConsts + mod.constants.size + mod.extraConstNames.size
+  let mut constantMapModule : HashMap Name Name := mkHashMap (capacity := numConsts)
+  for h:modIdx in [0:s.moduleData.size] do
+    let modName := s.moduleNames[modIdx]!
+    let mod := s.moduleData[modIdx]'h.upper
+    for cname in mod.constNames, cinfo in mod.constants do
+      constantMapModule := constantMapModule.insertIfNew cname modName |>.1
+  pure constantMapModule
+
+unsafe def importModulesHacked (imports : Array Import) (opts : Options) (trustLevel : UInt32 := 0)
+    (leakEnv := false) : IO (HashMap Name Name) := do
+  for imp in imports do
+    if imp.module matches .anonymous then
+      throw <| IO.userError "import failed, trying to import module with anonymous name"
+  withImporting do
+    let (_, s) ← importModulesCore imports |>.run
+    finalizeImportHacked (leakEnv := leakEnv) s imports opts trustLevel
 
 structure Config : Type where
   srcDir : System.FilePath := ".lake/build/lib" -- the directory where .olean files are found
@@ -53,6 +77,7 @@ unsafe def main (args : List String) : IO Unit := do
         else
           IO.println s!"[{k}/{totalFiles}] PROCESSING {srcFile} → {outFile}"
           let (data, region) ← Lean.readModuleData srcFile
+          let constModMap ← importModulesHacked data.imports Lean.Options.empty
           let moduleName := baseName.foldl Lean.Name.str Lean.Name.anonymous
-          IO.FS.withFile outFile .write (fun fh => Sexp.write fh $ Sexp.fromModuleData conf.refsOnly moduleName data)
+          IO.FS.withFile outFile .write (fun fh => Sexp.write fh $ Sexp.fromModuleData constModMap conf.refsOnly moduleName data)
           region.free

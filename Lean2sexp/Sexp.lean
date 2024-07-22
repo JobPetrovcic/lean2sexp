@@ -1,5 +1,4 @@
 import Lean
-import Init.Meta
 
 inductive Sexp : Type
 | atom : String → Sexp
@@ -63,14 +62,7 @@ instance: Sexpable UInt64 where
 instance: Sexpable Float where
   toSexp := .double
 
-/-def Sexp.getFullName : Lean.Name → String := (Lean.Name.toStringWithSep "." false)-/
-
-def Sexp.getFullName (sep : String) : Lean.Name → String
-| .anonymous       => "[anonymous]"
-| .str n s         => (Sexp.getFullName sep n) ++ sep ++ s
-| .num n v         => (Sexp.getFullName sep n) ++ sep ++ Nat.repr v
-
-def Sexp.fromName (n : Lean.Name) : Sexp := constr "name" [toSexp ( "start:" ++ Sexp.getFullName "." n)]
+def Sexp.fromName (n : Lean.Name) : Sexp := constr "name" [toSexp n.toString]
 
 instance: Sexpable Lean.Name where
   toSexp := Sexp.fromName
@@ -144,7 +136,7 @@ abbrev M := StateM St
 def M.run {α : Type} (r : Lean.HashSet Lean.Expr) (act : M α) : α :=
   StateT.run' (s := { repeated := r}) act
 
-partial def M.convert (e : Lean.Expr) : M Sexp := do
+partial def M.convert (moduleHashes : Lean.HashMap Lean.Name Lean.Name)(e : Lean.Expr) : M Sexp := do
   let st ← get
   match st.index.find? e with
   | .some k => pure $ constr "ref" [toSexp k]
@@ -155,27 +147,27 @@ partial def M.convert (e : Lean.Expr) : M Sexp := do
       | .fvar fv => pure $ constr "fvar" [toSexp fv.name]
       | .mvar mvarId => pure $ constr "meta" [toSexp mvarId.name]
       | .sort u => pure $ constr "sort" [toSexp u]
-      | .const declName us => pure $ constr "const" $ toSexp declName :: us.map toSexp
+      | .const declName us => pure $ constr "const" $ toSexp (Lean.Name.str (moduleHashes.find! declName) declName.toString) :: us.map toSexp
       | .app _ _ =>
         let lst ← getSpine e
         pure $ constr "apply" lst.reverse
       | .lam _ binderType body _ =>
-        let s1 ← convert binderType
-        let s2 ← convert body
+        let s1 ← convert moduleHashes binderType
+        let s2 ← convert moduleHashes body
         pure $ constr "lambda" [s1, s2]
       | .forallE _ binderType body _ =>
-        let s1 ← convert binderType
-        let s2 ← convert body
+        let s1 ← convert moduleHashes binderType
+        let s2 ← convert moduleHashes body
         pure $ constr "pi" [s1, s2]
       | .letE _ type value body _ =>
-        let s1 ← convert type
-        let s2 ← convert value
-        let s3 ← convert body
+        let s1 ← convert moduleHashes type
+        let s2 ← convert moduleHashes value
+        let s3 ← convert moduleHashes body
         pure $ constr "let" [s1, s2, s3]
       | .lit l => pure $ toSexp l
-      | .mdata _ expr => convert expr
+      | .mdata _ expr => convert moduleHashes expr
       | .proj typeName idx struct =>
-        let s ← convert struct
+        let s ← convert moduleHashes struct
         pure $ constr "proj" [toSexp typeName, toSexp idx, s]
     if (← get).repeated.contains e then
       let st ← get
@@ -187,15 +179,15 @@ partial def M.convert (e : Lean.Expr) : M Sexp := do
         match e with
         | .app e1 e2 =>
           let ss1 ← getSpine e1
-          let s2 ← convert e2
+          let s2 ← convert moduleHashes e2
           pure $ s2 :: ss1
         | e =>
-          let s ← convert e
+          let s ← convert moduleHashes e
           pure [s]
 
-partial def Sexp.fromExpr (e : Lean.Expr) : Sexp :=
+partial def Sexp.fromExpr (moduleHashes : Lean.HashMap Lean.Name Lean.Name) (e : Lean.Expr) : Sexp :=
   M.run (repeated e) do
-    let s ← M.convert e
+    let s ← M.convert moduleHashes e
     let st ← get
     pure $ st.nodes.foldl (fun t (k, n) => constr "node" [toSexp k, n, t]) s
 
@@ -259,12 +251,10 @@ def Sexp.constantInfo (exprCollect : Lean.Expr → Sexp) (info : Lean.ConstantIn
       | .ctorInfo val => constr "constructor" [toSexp val.induct]
       | .recInfo val => constr "recursor" [exprCollect val.type]
 
-def Sexp.fromModuleData (refsOnly : Bool) (nm : Lean.Name) (data : Lean.ModuleData) : Sexp :=
-  let ost := Sexp.string (String.intercalate "; " (data.constNames.toList.map (fun s ↦ s.toString)))
-  --let ost := Sexp.string (String.intercalate "; " (data.extraConstNames.toList.map (fun s ↦ s.toString)))
+def Sexp.fromModuleData (moduleHashes : Lean.HashMap Lean.Name Lean.Name) (refsOnly : Bool) (nm : Lean.Name) (data : Lean.ModuleData) : Sexp :=
   let lst := data.constants.toList.filter keepEntry
-  let moduleBody := lst.map (constantInfo $ if refsOnly then fromExprRefs else fromExpr)
-  Sexp.cons (ost :: (constr "module" $ constr "module-name" [toSexp nm] :: moduleBody):: [])
+  let moduleBody := lst.map (constantInfo $ if refsOnly then fromExprRefs else (fromExpr moduleHashes))
+  constr "module" $ constr "module-name" [toSexp nm] :: moduleBody
   where keepEntry (info : Lean.ConstantInfo) : Bool :=
     match info.name with
     | .anonymous => true
