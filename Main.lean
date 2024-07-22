@@ -14,7 +14,6 @@ import Lean.Util.Path
 import Lean.Util.FindExpr
 import Lean.Util.Profile
 import Lean.Util.InstantiateLevelParams
-import Std.Data.HashMap
 
 open Lean
 unsafe def finalizeImportHacked (s : ImportState) (imports : Array Import) (opts : Options) (trustLevel : UInt32 := 0)
@@ -27,8 +26,9 @@ unsafe def finalizeImportHacked (s : ImportState) (imports : Array Import) (opts
   for h:modIdx in [0:s.moduleData.size] do
     let modName := s.moduleNames[modIdx]!
     let mod := s.moduleData[modIdx]'h.upper
-    for cname in mod.constNames, cinfo in mod.constants do
-      constantMapModule := constantMapModule.insertIfNew cname modName |>.1
+    IO.println s!"{modName}"
+    --for cname in mod.constNames, cinfo in mod.constants do
+      --constantMapModule := constantMapModule.insertIfNew cname modName |>.1
   pure constantMapModule
 
 unsafe def importModulesHacked (imports : Array Import) (opts : Options) (trustLevel : UInt32 := 0)
