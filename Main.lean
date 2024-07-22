@@ -35,6 +35,7 @@ unsafe def importModulesHacked (imports : Array Import) (opts : Options) (trustL
     IO.println s!"{imp.module}"
     if imp.module matches .anonymous then
       throw <| IO.userError "import failed, trying to import module with anonymous name"
+  IO.println "Finished reading modules"
   withImporting do
     let (_, s) ← importModulesCore imports |>.run
     finalizeImportHacked (leakEnv := leakEnv) s imports opts trustLevel
