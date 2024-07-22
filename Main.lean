@@ -89,7 +89,7 @@ unsafe def main (args : List String) : IO Unit := do
         else
           IO.println s!"[{k}/{totalFiles}] PROCESSING {srcFile} → {outFile}"
           let (data, region) ← Lean.readModuleData srcFile
-          --let constModMap ← importModulesHacked data.imports Lean.Options.empty
+          let constModMap ← importModulesHacked data.imports Lean.Options.empty
           let moduleName := baseName.foldl Lean.Name.str Lean.Name.anonymous
           IO.FS.withFile outFile .write (fun fh => Sexp.write fh $ Sexp.fromModuleData conf.refsOnly moduleName data)
           region.free
