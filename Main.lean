@@ -32,7 +32,7 @@ unsafe def finalizeImportHacked (s : ImportState) (imports : Array Import) (opts
 unsafe def importModulesHacked (imports : Array Import) (opts : Options) (trustLevel : UInt32 := 0)
     (leakEnv := false) : IO (HashMap Name Name) := do
   for imp in imports do
-    IO.println "hello"
+    IO.println s!"{imp.module}"
     if imp.module matches .anonymous then
       throw <| IO.userError "import failed, trying to import module with anonymous name"
   withImporting do
