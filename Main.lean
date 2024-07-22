@@ -2,9 +2,6 @@ import «Lean2sexp».Sexp
 import Lean
 import Lean.Environment
 import Lean.Util
-import Init.Control.StateRef
-import Init.Data.Array.BinSearch
-import Init.Data.Stream
 import Lean.Data.HashMap
 import Lean.ImportingFlag
 import Lean.Data.SMap
