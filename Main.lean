@@ -38,6 +38,7 @@ unsafe def importModulesHacked (imports : Array Import) (opts : Options) (trustL
   IO.println "Finished reading modules"
   withImporting do
     let (_, s) ← importModulesCore imports |>.run
+    IO.println "Finished importModulesCore modules"
     finalizeImportHacked (leakEnv := leakEnv) s imports opts trustLevel
 
 structure Config : Type where
