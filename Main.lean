@@ -2,6 +2,7 @@ import «Lean2sexp».Sexp
 import Lean
 import Lean.Environment
 import Lean.Util
+import Lean.Data.HashMap
 
 open Lean
 unsafe def finalizeImportHacked (s : ImportState) (imports : Array Import) (opts : Options) (trustLevel : UInt32 := 0)
@@ -9,6 +10,8 @@ unsafe def finalizeImportHacked (s : ImportState) (imports : Array Import) (opts
   let numConsts := s.moduleData.foldl (init := 0) fun numConsts mod =>
     numConsts + mod.constants.size + mod.extraConstNames.size
   let mut constantMapModule : HashMap Name Name := mkHashMap (capacity := numConsts)
+  IO.println s!"{s.moduleData.size}"
+  IO.println s!"{s.moduleNames.size}"
   for h:modIdx in [0:s.moduleData.size] do
     let modName := s.moduleNames[modIdx]!
     let mod := s.moduleData[modIdx]'h.upper
