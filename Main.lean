@@ -2,7 +2,19 @@ import «Lean2sexp».Sexp
 import Lean
 import Lean.Environment
 import Lean.Util
+import Init.Control.StateRef
+import Init.Data.Array.BinSearch
+import Init.Data.Stream
 import Lean.Data.HashMap
+import Lean.ImportingFlag
+import Lean.Data.SMap
+import Lean.Declaration
+import Lean.LocalContext
+import Lean.Util.Path
+import Lean.Util.FindExpr
+import Lean.Util.Profile
+import Lean.Util.InstantiateLevelParams
+import Std.Data.HashMap
 
 open Lean
 unsafe def finalizeImportHacked (s : ImportState) (imports : Array Import) (opts : Options) (trustLevel : UInt32 := 0)
