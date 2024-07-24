@@ -1,5 +1,6 @@
 import «Lean2sexp».Sexp
 import Lean
+open Nat
 
 open Lean
 open Lean.Elab
@@ -56,16 +57,22 @@ unsafe def recursivelyProcessDirectory (conf : Config) (curName : Name)(dir : Sy
   IO.println s!"Searching files in source directory {dir}..."
   let mut entries ← dir.readDir
   for entry in entries do
-    let newCurName := Name.str curName entry.fileName
-    IO.println s!"new cureent name {newCurName}"
+
     if (← entry.path.isDir) then
-      IO.println s!"Going into directory {entry.fileName}"
+      let newCurName := Name.str curName entry.fileName
+      IO.println s!"Going into directory {newCurName}"
       -- is dir
       recursivelyProcessDirectory conf newCurName entry.path
     else
       -- is regular file
-      IO.println s!"Processing {newCurName}"
-      --processModule conf newCurName
+      match (System.FilePath.fileStem entry.root) with
+      | some fileRootName => (
+        let newCurName := Name.str curName fileRootName
+        IO.println s!"Processing {newCurName}"
+        --processModule conf newCurName
+      )
+      | none => panic! s!"The file {entry.fileName} does not have the expected form."
+
 
 unsafe def main (args : List String) : IO Unit := do
   match parseArgs ({} : Config) args with
