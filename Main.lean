@@ -1,6 +1,10 @@
 import «Lean2sexp».Sexp
 import Lean
 
+open Lean
+open Lean.Elab
+open Lean.Elab.Command
+
 structure Config : Type where
   srcDir : System.FilePath := ".lake/build/lib" -- the directory where .olean files are found
   outDir : System.FilePath := "sexp" -- the output directory (created if needed)
@@ -24,6 +28,24 @@ def parseArgs (conf : Config) (args : List String) : Option Config :=
   | "--refsOnly" :: args => parseArgs {conf with refsOnly := True} args
   | "--force" :: args => parseArgs {conf with force := True} args
   | _ => .none
+
+unsafe def getConstantsToFullName (nameToModuleId : Lean.Name → Option ModuleIdx) (importedModuleNames : Array Name) (constantName : Name) : Name :=
+  match nameToModuleId constantName with
+  | some a =>
+    importedModuleNames[a.toNat]!.append constantName
+  | none => panic! s!"Module ID not found for constant: {constantName}"
+
+unsafe def processModule (moduleName : Name) : IO Unit := do
+  IO.println s!"Processing module {moduleName}"
+  let env ← importModules #[Import.mk moduleName false] {}
+  let nameToModuleId := env.getModuleIdxFor?
+  let importedModuleNames := env.header.moduleNames
+  let constantsToFullName := getConstantsToFullName nameToModuleId importedModuleNames
+  IO.println s!"Modules {env.header.moduleNames}"
+  --IO.println s!"Const2ModIdx {env.const2ModIdx.toList.map (fun (k, v) => toString k ++ ": " ++toString v)}"
+  let modulesData := env.header.moduleData
+  let mainModuleData := modulesData[modulesData.size - 1]!
+  IO.println s!"{Sexp.fromModuleData constantsToFullName false moduleName mainModuleData}"
 
 unsafe def main (args : List String) : IO Unit := do
   match parseArgs ({} : Config) args with
@@ -52,7 +74,18 @@ unsafe def main (args : List String) : IO Unit := do
           IO.println s!"[{k}/{totalFiles}] SKIPPING {srcFile}"
         else
           IO.println s!"[{k}/{totalFiles}] PROCESSING {srcFile} → {outFile}"
-          let (data, region) ← Lean.readModuleData srcFile
+          --let (data, region) ← Lean.readModuleData srcFile
           let moduleName := baseName.foldl Lean.Name.str Lean.Name.anonymous
-          IO.FS.withFile outFile .write (fun fh => Sexp.write fh $ Sexp.fromModuleData conf.refsOnly moduleName data)
-          region.free
+
+          -- Added
+          let env ← importModules #[Import.mk moduleName false] {}
+          let nameToModuleId := env.getModuleIdxFor?
+          let importedModuleNames := env.header.moduleNames
+          let constantsToFullName := getConstantsToFullName nameToModuleId importedModuleNames
+          --IO.println s!"Const2ModIdx {env.const2ModIdx.toList.map (fun (k, v) => toString k ++ ": " ++toString v)}"
+          let modulesData := env.header.moduleData
+          let mainModuleData := modulesData[modulesData.size - 1]!
+          --IO.println s!"{Sexp.fromModuleData constantsToFullName false moduleName mainModuleData}"
+
+          IO.FS.withFile outFile .write (fun fh => Sexp.write fh $ Sexp.fromModuleData constantsToFullName conf.refsOnly moduleName mainModuleData)
+          --region.free
