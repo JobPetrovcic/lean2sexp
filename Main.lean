@@ -58,7 +58,7 @@ unsafe def recursivelyProcessDirectory (conf : Config) (curDirName : Name) (dir 
   for entry in entries do
     let newName := (Name.str curDirName entry.fileName)
     if (← entry.path.isDir) then
-      IO.println s!"Going into directory {newName}"
+      IO.println s!"Going into directory {newName} {entry.fileName}"
       -- is dir
       --recursivelyProcessDirectory conf newName entry.path
     else
