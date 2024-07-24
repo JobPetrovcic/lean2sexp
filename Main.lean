@@ -64,13 +64,14 @@ unsafe def recursivelyProcessDirectory (conf : Config) (curName : Name)(dir : Sy
       recursivelyProcessDirectory conf newCurName entry.path
     else
       -- is regular file
-      match (System.FilePath.fileStem entry.path) with
-      | some fileRootName => (
-        let newCurName := Name.str curName fileRootName
-        IO.println s!"Processing {newCurName}"
-        --processModule conf newCurName
-      )
-      | none => panic! s!"The file {entry.path} does not have the expected form."
+      IO.println s!"Processing {entry.path}"
+      --match (System.FilePath.fileStem entry.path) with
+      --| some fileRootName => (
+      --  let newCurName := Name.str curName fileRootName
+      --  IO.println s!"Processing {newCurName}"
+      --  --(processModule conf newCurName)
+      --)
+      --| none => panic! s!"The file {entry.path} does not have the expected form."
 
 
 unsafe def main (args : List String) : IO Unit := do
