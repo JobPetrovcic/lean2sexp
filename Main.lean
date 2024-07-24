@@ -57,7 +57,6 @@ unsafe def recursivelyProcessDirectory (conf : Config) (curName : Name)(dir : Sy
   IO.println s!"Searching files in source directory {dir}..."
   let mut entries ← dir.readDir
   for entry in entries do
-
     if (← entry.path.isDir) then
       let newCurName := Name.str curName entry.fileName
       IO.println s!"Going into directory {newCurName}"
@@ -78,4 +77,4 @@ unsafe def main (args : List String) : IO Unit := do
   match parseArgs ({} : Config) args with
   | .none =>
     IO.println s!"Error: could not parse command-line arguments\n\n{usage}"
-  | .some conf => recursivelyProcessDirectory conf (Name.str Name.anonymous "Test") conf.srcDir
+  | .some conf => recursivelyProcessDirectory conf (`conf.srcDir.toString) conf.srcDir
