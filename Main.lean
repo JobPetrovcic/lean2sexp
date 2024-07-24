@@ -6,7 +6,7 @@ open Lean.Elab
 open Lean.Elab.Command
 
 structure Config : Type where
-  srcDir : System.FilePath := "src"
+  srcDir : System.FilePath := "Test"
   outDir : System.FilePath := "sexp" -- the output directory (created if needed)
   refsOnly : Bool := False -- only output references names
   force : Bool := False -- process file even if .sexp is newer than .olean
@@ -53,7 +53,7 @@ unsafe def processModule (conf : Config) (moduleName : Name) : IO Unit := do
   | none => throw (IO.userError s!"Module {moduleName} was not imported into the environment!")
 
 unsafe def recursivelyProcessDirectory (conf : Config) (curDirName : Name) (dir : System.FilePath): IO Unit := do
-  IO.println "Searching files"
+  IO.println s!"Searching files in source directory {dir}..."
   let mut entries ← dir.readDir
   for entry in entries do
     let newName := (Name.str curDirName entry.fileName)
