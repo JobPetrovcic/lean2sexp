@@ -70,11 +70,11 @@ unsafe def recursivelyProcessDirectory (conf : Config) (curName : Name)(dir : Sy
         IO.println s!"Processing {newCurName}"
         --processModule conf newCurName
       )
-      | none => panic! s!"The file {entry.fileName} does not have the expected form."
+      | none => panic! s!"The file {entry.path} does not have the expected form."
 
 
 unsafe def main (args : List String) : IO Unit := do
   match parseArgs ({} : Config) args with
   | .none =>
     IO.println s!"Error: could not parse command-line arguments\n\n{usage}"
-  | .some conf => recursivelyProcessDirectory conf (`conf.srcDir.toString) conf.srcDir
+  | .some conf => recursivelyProcessDirectory conf (Name.str Name.anonymous (conf.srcDir.toString)) conf.srcDir
