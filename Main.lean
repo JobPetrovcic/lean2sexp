@@ -53,6 +53,7 @@ unsafe def processModule (conf : Config) (moduleName : Name) : IO Unit := do
   | none => throw (IO.userError s!"Module {moduleName} was not imported into the environment!")
 
 unsafe def recursivelyProcessDirectory (conf : Config) (curDirName : Name) (dir : System.FilePath): IO Unit := do
+  IO.println "Searching files"
   let mut entries ← dir.readDir
   for entry in entries do
     let newName := (Name.str curDirName entry.fileName)
