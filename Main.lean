@@ -70,7 +70,7 @@ unsafe def recursivelyProcessDirectory (conf : Config) (curName : Name)(dir : Sy
       let inFileStringList := conf.srcDir.toString :: baseName
       let inFileName := inFileStringList.foldl (fun acc str => Name.str acc str) Name.anonymous
       IO.println s!"Processing {inFileName}"
-      --(processModule conf inFileName)
+      processModule conf inFileName
       --match (System.FilePath.fileStem entry.path) with
       --| some fileRootName => (
       --  let newCurName := Name.str curName fileRootName
