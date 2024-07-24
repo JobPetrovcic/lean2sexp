@@ -66,7 +66,8 @@ unsafe def recursivelyProcessDirectory (conf : Config) (curName : Name)(dir : Sy
       -- is regular file
       --IO.println s!"Processing {entry.path}"
       let baseName := (entry.path.withExtension "").components.drop (conf.srcDir.components.length)
-      let inFileString := (".".intercalate (baseName ++ ["sexp"]))
+
+      let inFileString := (".".intercalate (conf.srcDir.toString :: baseName))
       IO.println s!"Processing {inFileString}"
       --match (System.FilePath.fileStem entry.path) with
       --| some fileRootName => (
