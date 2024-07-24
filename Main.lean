@@ -63,7 +63,7 @@ unsafe def recursivelyProcessDirectory (conf : Config) (curDirName : Name) (dir 
       --recursivelyProcessDirectory conf newName entry.path
     else
       -- is regular file
-      IO.println s!"Processing {newName}"
+      IO.println s!"Processing {newName} {entry.fileName}"
       --processModule conf newName
 
 unsafe def main (args : List String) : IO Unit := do
