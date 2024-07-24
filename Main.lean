@@ -52,21 +52,22 @@ unsafe def processModule (conf : Config) (moduleName : Name) : IO Unit := do
   )
   | none => throw (IO.userError s!"Module {moduleName} was not imported into the environment!")
 
-unsafe def recursivelyProcessDirectory (conf : Config) (dir : System.FilePath): IO Unit := do
+unsafe def recursivelyProcessDirectory (conf : Config) (curName : Name)(dir : System.FilePath): IO Unit := do
   IO.println s!"Searching files in source directory {dir}..."
   let mut entries ← dir.readDir
   for entry in entries do
+    let newCurName := Name.str curName entry.fileName
     if (← entry.path.isDir) then
-      IO.println s!"Going into directory {entry.path}"
+      IO.println s!"Going into directory {entry.fileName}"
       -- is dir
-      recursivelyProcessDirectory conf entry.path
+      recursivelyProcessDirectory conf newCurName entry.path
     else
       -- is regular file
-      IO.println s!"Processing {entry.path}"
-      --processModule conf newName
+      IO.println s!"Processing {newCurName}"
+      --processModule conf newCurName
 
 unsafe def main (args : List String) : IO Unit := do
   match parseArgs ({} : Config) args with
   | .none =>
     IO.println s!"Error: could not parse command-line arguments\n\n{usage}"
-  | .some conf => recursivelyProcessDirectory conf conf.srcDir
+  | .some conf => recursivelyProcessDirectory conf (Name.str Name.anonymous "") conf.srcDir
