@@ -71,4 +71,4 @@ unsafe def main (args : List String) : IO Unit := do
   match parseArgs ({} : Config) args with
   | .none =>
     IO.println s!"Error: could not parse command-line arguments\n\n{usage}"
-  | .some conf => recursivelyProcessDirectory conf (Name.str Name.anonymous "") conf.srcDir
+  | .some conf => recursivelyProcessDirectory conf (Name.str Name.anonymous "Test") conf.srcDir
