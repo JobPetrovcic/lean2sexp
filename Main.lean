@@ -38,6 +38,7 @@ unsafe def getConstantsToFullName (nameToModuleId : Lean.Name → Option ModuleI
 
 
 unsafe def processModule (conf : Config) (moduleName : Name) : IO Unit := do
+  IO.println s!"Processing module {moduleName}"
   let env ← importModules #[Import.mk moduleName false] {}
   let nameToModuleId := env.getModuleIdxFor?
   let importedModuleNames := env.header.moduleNames
