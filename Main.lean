@@ -60,11 +60,11 @@ unsafe def recursivelyProcessDirectory (conf : Config) (curDirName : Name) (dir 
     if (← entry.path.isDir) then
       IO.println s!"Going into directory {newName}"
       -- is dir
-      recursivelyProcessDirectory conf newName entry.path
+      --recursivelyProcessDirectory conf newName entry.path
     else
       -- is regular file
       IO.println s!"Processing {newName}"
-      processModule conf newName
+      --processModule conf newName
 
 unsafe def main (args : List String) : IO Unit := do
   match parseArgs ({} : Config) args with
