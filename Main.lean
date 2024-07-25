@@ -1,4 +1,3 @@
-import Mathlib
 import Lean
 
 inductive Sexp : Type
@@ -252,16 +251,20 @@ def Sexp.constantInfo (constantsToFullName : Lean.Name → Lean.Name) (exprColle
       | .ctorInfo val => constr "constructor" [toSexp val.induct]
       | .recInfo val => constr "recursor" [exprCollect val.type]
 
-def Sexp.fromModuleData (constantsToFullName : Lean.Name → Lean.Name) (refsOnly : Bool) (nm : Lean.Name) (data : Lean.ModuleData) : Sexp :=
+structure entryRecord where
+  entryName : Lean.Name
+  entrySexp : Sexp
+
+def Sexp.fromModuleData (constantsToFullName : Lean.Name → Lean.Name) (refsOnly : Bool) (data : Lean.ModuleData) : List entryRecord :=
   let lst := data.constants.toList.filter keepEntry -- list of constants
-  let moduleBody := lst.map ((constantInfo constantsToFullName)$ if refsOnly then fromExprRefs else fromExpr constantsToFullName)
-  constr "module" $ constr "module-name" [toSexp nm] :: moduleBody
+  let moduleBody := lst.map (fun s ↦ entryRecord.mk (constantsToFullName s.name) (((constantInfo constantsToFullName)$ if refsOnly then fromExprRefs else fromExpr constantsToFullName) s))
+  moduleBody
+  --constr "module" $ constr "module-name" [toSexp nm] :: moduleBody
   where keepEntry (info : Lean.ConstantInfo) : Bool :=
     match info.name with
     | .anonymous => true
     | .str _ _ => ! info.name.isInternal
     | .num _ _ => true
-
 
 open Lean
 open Lean.Elab
@@ -273,74 +276,104 @@ unsafe def getConstantsToFullName (nameToModuleId : Lean.Name → Option ModuleI
     importedModuleNames[a.toNat]!.append constantName
   | none => panic! s!"Module ID not found for constant: {constantName}"
 
-unsafe def processModule (moduleName : Name) : IO Sexp := do
-  --IO.println s!"Processing module {moduleName}"
-  let env ← importModules #[Import.mk moduleName false] {}
-  let nameToModuleId := env.getModuleIdxFor?
-  let importedModuleNames := env.header.moduleNames
-  let constantsToFullName := getConstantsToFullName nameToModuleId importedModuleNames
-  --IO.println s!"Modules {env.header.moduleNames}"
-  --IO.println s!"Const2ModIdx {env.const2ModIdx.toList.map (fun (k, v) => toString k ++ ": " ++toString v)}"
-  let modulesData := env.header.moduleData
-  let mainModuleData := modulesData[modulesData.size - 1]!
-  let sexpConstruct := (Sexp.fromModuleData constantsToFullName false moduleName mainModuleData)
-  --Environment.freeRegions env
-  pure sexpConstruct
+def isAlnum (c : Char) : Bool :=
+  c.isAlpha || c.isDigit || c == '_' || c == '-'
 
-unsafe def processRegularFile (overwrite :Bool := false) (moduleName : Lean.Name) (outFile : System.FilePath ) : IO Unit := do
+def cleanString (s : String) : String :=
+  s.foldl (fun acc c => if isAlnum c then acc.push c else acc) ""
+
+def nameToSexpFileName (unique_id : Nat) (n : Name) : String :=
+  toString unique_id ++ ".sexp"
+  --let rec aux : Name → List String
+  --  | Name.anonymous => []
+  --  | Name.str p s => aux p ++ [cleanString s]
+  --  | Name.num p n => aux p ++ [toString n]
+  --let nameParts := aux n
+  --let joinedName := String.intercalate "_" nameParts
+  --joinedName ++ "_" ++ toString unique_id ++ ".sexp"
+
+unsafe def writeEntry (unique_id : Nat) (overwrite : Bool) (entry: entryRecord): IO Nat := do
+  let outFile := System.FilePath.mk ("sexp/" ++ (nameToSexpFileName unique_id entry.entryName))
+  IO.println s!"Trying to check existence of file {outFile}."
   let outMetaData ← outFile.metadata.toBaseIO
   let proceed : Bool :=
     match outMetaData with
     | .error _ => true
     | .ok _ => overwrite
-
   if proceed then
-    IO.println s!"Processing {moduleName}"
-
-    let env ← importModules #[Import.mk moduleName false] {}
-    let nameToModuleId := env.getModuleIdxFor?
-    let importedModuleNames := env.header.moduleNames
-    let constantsToFullName := getConstantsToFullName nameToModuleId importedModuleNames
-    let modulesData := env.header.moduleData
-    let mainModuleData := modulesData[modulesData.size - 1]!
-    let sexpConstruct := (Sexp.fromModuleData constantsToFullName false moduleName mainModuleData)
-    IO.FS.withFile outFile .write (fun fh => Sexp.write fh sexpConstruct)
-
-    Environment.freeRegions env
+    IO.println s!"Opened {outFile}. Trying to write entry {entry.entryName}..."
+    IO.FS.withFile outFile .write (fun fh => Sexp.write fh entry.entrySexp)
+    IO.println s!"Successfully written entry {entry.entryName} to file {outFile}."
+    pure (unique_id+1)
   else
-    IO.println s!"Skipping {moduleName}"
+    panic! s!"File {outFile} for entry {entry.entryName} already exists or something went wrong."
+    --IO.println s!"File {outFile} already exists or something went wrong"
 
-def nameToSexpFileName (n : Name) : String :=
-  let rec aux : Name → List String
-    | Name.anonymous => []
-    | Name.str p s => aux p ++ [s]
-    | Name.num p n => aux p ++ [toString n]
-  let nameParts := aux n
-  let joinedName := String.intercalate "_" nameParts
-  joinedName ++ ".sexp"
+unsafe def processRegularFile (unique_id : Nat)(overwrite : Bool := false) (moduleName : Lean.Name) : IO Nat := do
+  IO.println s!"Trying to process {moduleName}"
+  let env ← importModules #[Import.mk moduleName false] {}
+  IO.println s!"Opened {moduleName}"
+  let nameToModuleId := env.getModuleIdxFor?
+  let importedModuleNames := env.header.moduleNames
+  let constantsToFullName := getConstantsToFullName nameToModuleId importedModuleNames
+  let modulesData := env.header.moduleData
+  let mainModuleData := modulesData[modulesData.size - 1]!
+  let entries := Sexp.fromModuleData constantsToFullName false mainModuleData
+  IO.println s!"Trying to write entries for {moduleName}"
+  let mut cur_unique_id := unique_id
+  for entry in entries do
+    --IO.println s!"{cur_unique_id}"
+    cur_unique_id ← writeEntry cur_unique_id overwrite entry
+  IO.println s!"Written entries for {moduleName}"
+  Environment.freeRegions env
+  pure cur_unique_id
 
-unsafe def recursivelyProcessDirectory (curName : Name)(dir : System.FilePath): IO Unit := do
+  --let outMetaData ← outFile.metadata.toBaseIO
+  --let proceed : Bool :=
+  --  match outMetaData with
+  --  | .error _ => true
+  --  | .ok _ => overwrite
+--
+  --if proceed then
+  --  IO.println s!"Processing {moduleName}"
+--
+  --  let env ← importModules #[Import.mk moduleName false] {}
+  --  let nameToModuleId := env.getModuleIdxFor?
+  --  let importedModuleNames := env.header.moduleNames
+  --  let constantsToFullName := getConstantsToFullName nameToModuleId importedModuleNames
+  --  let modulesData := env.header.moduleData
+  --  let mainModuleData := modulesData[modulesData.size - 1]!
+  --  let sexpConstruct := (Sexp.fromModuleData constantsToFullName false mainModuleData)
+  --  sexpConstruct.map (fun ⟨entryName, entrySexp ⟩ ↦ IO.FS.withFile outFile .write (fun fh => Sexp.write fh sexpConstruct))
+--
+  --  Environment.freeRegions env
+  --else
+  --  IO.println s!"Skipping {moduleName}"
+
+unsafe def recursivelyProcessDirectory (unique_id : Nat) (curName : Name)(dir : System.FilePath): IO Nat := do
   IO.println s!"Searching files in source directory {dir}..."
   let mut entries ← dir.readDir
+  let mut cur_unique_id := unique_id
   for entry in entries do
     if (← entry.path.isDir) then
       -- is dir
       let newCurName := Name.str curName entry.fileName
       IO.println s!"Going into directory {newCurName}"
-      recursivelyProcessDirectory newCurName entry.path
+      cur_unique_id ← recursivelyProcessDirectory cur_unique_id newCurName entry.path
     else
       -- is regular file
       --IO.println s!"Processing {entry.path}"
       match entry.path.fileStem with
       | some baseName =>
         let moduleName := Name.str curName baseName
-        let outFile := System.FilePath.mk ("sexp/" ++(nameToSexpFileName moduleName))
-        processRegularFile false moduleName outFile
-      | none => IO.println "This should be impossible."
+        --let outFile := System.FilePath.mk ("sexp/" ++(nameToSexpFileName moduleName))
+        cur_unique_id ← processRegularFile cur_unique_id false moduleName
+      | none => panic! "This should be impossible."
+  pure cur_unique_id
 
 unsafe def main (args : List String) : IO Unit := do
   match args with
-  | dir :: [] => recursivelyProcessDirectory (Name.str Name.anonymous dir) dir
+  | dir :: [] => let _ ← recursivelyProcessDirectory 0 (Name.str Name.anonymous dir) dir
   | _ => panic! "Incorrect use of arguments. Input is only the directory."
 
 --#eval main ["Mathlib"]
