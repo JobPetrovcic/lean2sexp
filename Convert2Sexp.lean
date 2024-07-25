@@ -1,3 +1,4 @@
+import Mathlib
 import Lean
 
 inductive Sexp : Type
@@ -238,8 +239,8 @@ instance: Sexpable Lean.QuotKind where
   | .lift => constr "lift" []
   | .ind  => constr "ind" []
 
-def Sexp.constantInfo (exprCollect : Lean.Expr → Sexp) (info : Lean.ConstantInfo) : Sexp :=
-    constr "entry" [toSexp info.name, exprCollect info.type, theDef info]
+def Sexp.constantInfo (constantsToFullName : Lean.Name → Lean.Name) (exprCollect : Lean.Expr → Sexp) (info : Lean.ConstantInfo) : Sexp :=
+    constr "entry" [toSexp (constantsToFullName info.name), exprCollect info.type, theDef info]
     where theDef : Lean.ConstantInfo → Sexp := fun info =>
       match info with
       | .axiomInfo _ => constr "axiom" []
@@ -253,7 +254,7 @@ def Sexp.constantInfo (exprCollect : Lean.Expr → Sexp) (info : Lean.ConstantIn
 
 def Sexp.fromModuleData (constantsToFullName : Lean.Name → Lean.Name) (refsOnly : Bool) (nm : Lean.Name) (data : Lean.ModuleData) : Sexp :=
   let lst := data.constants.toList.filter keepEntry -- list of constants
-  let moduleBody := lst.map (constantInfo $ if refsOnly then fromExprRefs else fromExpr constantsToFullName)
+  let moduleBody := lst.map ((constantInfo constantsToFullName)$ if refsOnly then fromExprRefs else fromExpr constantsToFullName)
   constr "module" $ constr "module-name" [toSexp nm] :: moduleBody
   where keepEntry (info : Lean.ConstantInfo) : Bool :=
     match info.name with
@@ -282,7 +283,32 @@ unsafe def processModule (moduleName : Name) : IO Sexp := do
   --IO.println s!"Const2ModIdx {env.const2ModIdx.toList.map (fun (k, v) => toString k ++ ": " ++toString v)}"
   let modulesData := env.header.moduleData
   let mainModuleData := modulesData[modulesData.size - 1]!
-  pure (Sexp.fromModuleData constantsToFullName false moduleName mainModuleData)
+  let sexpConstruct := (Sexp.fromModuleData constantsToFullName false moduleName mainModuleData)
+  --Environment.freeRegions env
+  pure sexpConstruct
+
+unsafe def processRegularFile (overwrite :Bool := false) (moduleName : Lean.Name) (outFile : System.FilePath ) : IO Unit := do
+  let outMetaData ← outFile.metadata.toBaseIO
+  let proceed : Bool :=
+    match outMetaData with
+    | .error _ => true
+    | .ok _ => overwrite
+
+  if proceed then
+    IO.println s!"Processing {moduleName}"
+
+    let env ← importModules #[Import.mk moduleName false] {}
+    let nameToModuleId := env.getModuleIdxFor?
+    let importedModuleNames := env.header.moduleNames
+    let constantsToFullName := getConstantsToFullName nameToModuleId importedModuleNames
+    let modulesData := env.header.moduleData
+    let mainModuleData := modulesData[modulesData.size - 1]!
+    let sexpConstruct := (Sexp.fromModuleData constantsToFullName false moduleName mainModuleData)
+    IO.FS.withFile outFile .write (fun fh => Sexp.write fh sexpConstruct)
+
+    Environment.freeRegions env
+  else
+    IO.println s!"Skipping {moduleName}"
 
 def nameToSexpFileName (n : Name) : String :=
   let rec aux : Name → List String
@@ -307,14 +333,14 @@ unsafe def recursivelyProcessDirectory (curName : Name)(dir : System.FilePath): 
       --IO.println s!"Processing {entry.path}"
       match entry.path.fileStem with
       | some baseName =>
-        let newCurName := Name.str curName baseName
-        IO.println s!"Processing {newCurName}"
-        let outFile := System.FilePath.mk ("sexp/" ++(nameToSexpFileName newCurName))
-        let sexpConstruct ← (processModule newCurName)
-        IO.FS.withFile outFile .write (fun fh => Sexp.write fh sexpConstruct)
+        let moduleName := Name.str curName baseName
+        let outFile := System.FilePath.mk ("sexp/" ++(nameToSexpFileName moduleName))
+        processRegularFile false moduleName outFile
       | none => IO.println "This should be impossible."
 
 unsafe def main (args : List String) : IO Unit := do
   match args with
   | dir :: [] => recursivelyProcessDirectory (Name.str Name.anonymous dir) dir
   | _ => panic! "Incorrect use of arguments. Input is only the directory."
+
+--#eval main ["Mathlib"]
