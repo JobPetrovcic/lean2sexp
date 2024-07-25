@@ -62,23 +62,23 @@ instance: Sexpable UInt64 where
 instance: Sexpable Float where
   toSexp := .double
 
-def Sexp.fromName (n : Lean.Name) : Sexp := constr "name" [toSexp n.toString]
+def Sexp.fromName (constantsToFullName : Lean.Name → Lean.Name) (n : Lean.Name) : Sexp := constr "name" [toSexp (constantsToFullName n).toString]
 
-instance: Sexpable Lean.Name where
-  toSexp := Sexp.fromName
+--instance: Sexpable Lean.Name where
+--  toSexp := Sexp.fromName
 
-def Sexp.fromLevel (lvl : Lean.Level) : Sexp := constr "level" [fromLvl lvl]
+def Sexp.fromLevel (constantsToFullName : Lean.Name → Lean.Name) (lvl : Lean.Level) : Sexp := constr "level" [fromLvl lvl]
   where
     fromLvl : Lean.Level → Sexp
     | .zero => constr "lzero" []
-    | .succ lvl =>  constr "lsucc" [fromLevel lvl]
-    | .max lvl1 lvl2 => constr "max" [fromLevel lvl1, fromLevel lvl2]
-    | .imax lvl1 lvl2 => constr "imax" [fromLevel lvl1, fromLevel lvl2]
-    | .param nm => toSexp nm
-    | .mvar mv => toSexp mv.name
+    | .succ lvl =>  constr "lsucc" [fromLevel constantsToFullName lvl]
+    | .max lvl1 lvl2 => constr "max" [fromLevel constantsToFullName lvl1, fromLevel constantsToFullName lvl2]
+    | .imax lvl1 lvl2 => constr "imax" [fromLevel constantsToFullName lvl1, fromLevel constantsToFullName lvl2]
+    | .param nm => Sexp.fromName constantsToFullName nm
+    | .mvar mv => Sexp.fromName constantsToFullName mv.name
 
-instance: Sexpable Lean.Level where
-  toSexp := Sexp.fromLevel
+--instance: Sexpable Lean.Level where
+--  toSexp := Sexp.fromLevel
 
 instance: Sexpable Lean.BinderInfo where
   toSexp := fun info =>
@@ -144,10 +144,10 @@ partial def M.convert (constantsToFullName : Lean.Name → Lean.Name) (e : Lean.
     let s ←
       match e with
       | .bvar k => pure $ constr "var" [toSexp k]
-      | .fvar fv => pure $ constr "fvar" [toSexp fv.name]
-      | .mvar mvarId => pure $ constr "meta" [toSexp mvarId.name]
-      | .sort u => pure $ constr "sort" [toSexp u]
-      | .const declName us => pure $ constr "const" $ toSexp (constantsToFullName declName) :: us.map toSexp
+      | .fvar fv => pure $ constr "fvar" [Sexp.fromName constantsToFullName fv.name]
+      | .mvar mvarId => pure $ constr "meta" [Sexp.fromName constantsToFullName mvarId.name]
+      | .sort u => pure $ constr "sort" [Sexp.fromLevel constantsToFullName u]
+      | .const declName us => pure $ constr "const" $ (Sexp.fromName constantsToFullName declName) :: us.map (Sexp.fromLevel constantsToFullName)
       | .app _ _ =>
         let lst ← getSpine e
         pure $ constr "apply" lst.reverse
@@ -168,7 +168,7 @@ partial def M.convert (constantsToFullName : Lean.Name → Lean.Name) (e : Lean.
       | .mdata _ expr => convert constantsToFullName expr
       | .proj typeName idx struct =>
         let s ← convert constantsToFullName struct
-        pure $ constr "proj" [toSexp typeName, toSexp idx, s]
+        pure $ constr "proj" [Sexp.fromName constantsToFullName typeName, toSexp idx, s]
     if (← get).repeated.contains e then
       let st ← get
       let r := st.nodes.length
@@ -192,7 +192,7 @@ partial def Sexp.fromExpr (constantsToFullName : Lean.Name → Lean.Name) (e : L
     pure $ st.nodes.foldl (fun t (k, n) => constr "node" [toSexp k, n, t]) s
 
 -- collect all the names references by an expression
-def collectRefs (e : Lean.Expr) : List Lean.Name :=
+def collectRefs (constantsToFullName : Lean.Name → Lean.Name) (e : Lean.Expr) : List Lean.Name :=
   let (_, ns) := collect {} {} e
   ns
   where collect (seen : Lean.HashSet Lean.Expr) (ns : List Lean.Name) (e : Lean.Expr)
@@ -224,8 +224,8 @@ def collectRefs (e : Lean.Expr) : List Lean.Name :=
       | .mdata _ expr => collect seen ns expr
       | .proj _ _ struct => collect seen ns struct
 
-def Sexp.fromExprRefs (e : Lean.Expr) : Sexp :=
-  constr "references" $ (collectRefs e).map toSexp
+def Sexp.fromExprRefs (constantsToFullName : Lean.Name → Lean.Name) (e : Lean.Expr) : Sexp :=
+  constr "references" $ (collectRefs constantsToFullName e).map (Sexp.fromName constantsToFullName)
 
 -- instance: Sexpable Lean.Expr where
 --   toSexp := Sexp.fromExpr
@@ -239,16 +239,16 @@ instance: Sexpable Lean.QuotKind where
   | .ind  => constr "ind" []
 
 def Sexp.constantInfo (constantsToFullName : Lean.Name → Lean.Name) (exprCollect : Lean.Expr → Sexp) (info : Lean.ConstantInfo) : Sexp :=
-    constr "entry" [toSexp (constantsToFullName info.name), exprCollect info.type, theDef info]
+    constr "entry" [(Sexp.fromName constantsToFullName info.name), exprCollect info.type, theDef info]
     where theDef : Lean.ConstantInfo → Sexp := fun info =>
       match info with
       | .axiomInfo _ => constr "axiom" []
       | .defnInfo val => constr "function" [exprCollect val.value]
       | .thmInfo val => constr "theorem" [exprCollect val.value]
       | .opaqueInfo val => constr "abstract" [exprCollect val.value]
-      | .quotInfo val => constr "quot-info" [toSexp val.kind, toSexp val.name, exprCollect val.type]
-      | .inductInfo val => constr "data" $ exprCollect val.type :: val.ctors.map toSexp
-      | .ctorInfo val => constr "constructor" [toSexp val.induct]
+      | .quotInfo val => constr "quot-info" [toSexp val.kind, Sexp.fromName constantsToFullName val.name, exprCollect val.type]
+      | .inductInfo val => constr "data" $ exprCollect val.type :: val.ctors.map (Sexp.fromName constantsToFullName)
+      | .ctorInfo val => constr "constructor" [Sexp.fromName constantsToFullName val.induct]
       | .recInfo val => constr "recursor" [exprCollect val.type]
 
 structure entryRecord where
@@ -257,7 +257,7 @@ structure entryRecord where
 
 def Sexp.fromModuleData (constantsToFullName : Lean.Name → Lean.Name) (refsOnly : Bool) (data : Lean.ModuleData) : List entryRecord :=
   let lst := data.constants.toList.filter keepEntry -- list of constants
-  let moduleBody := lst.map (fun s ↦ entryRecord.mk (constantsToFullName s.name) (((constantInfo constantsToFullName)$ if refsOnly then fromExprRefs else fromExpr constantsToFullName) s))
+  let moduleBody := lst.map (fun s ↦ entryRecord.mk (constantsToFullName s.name) (((constantInfo constantsToFullName)$ if refsOnly then fromExprRefs constantsToFullName else fromExpr constantsToFullName) s))
   moduleBody
   --constr "module" $ constr "module-name" [toSexp nm] :: moduleBody
   where keepEntry (info : Lean.ConstantInfo) : Bool :=
