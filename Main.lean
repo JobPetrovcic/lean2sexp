@@ -168,7 +168,7 @@ partial def M.convert (constantsToFullName : Lean.Name → Lean.Name) (e : Lean.
       | .mdata _ expr => convert constantsToFullName expr
       | .proj typeName idx struct =>
         let s ← convert constantsToFullName struct
-        pure $ constr "proj" [Sexp.fromName constantsToFullName typeName, toSexp idx, s]
+        pure $ constr "proj" [toSexp idx, Sexp.fromName constantsToFullName typeName, s]
     if (← get).repeated.contains e then
       let st ← get
       let r := st.nodes.length
