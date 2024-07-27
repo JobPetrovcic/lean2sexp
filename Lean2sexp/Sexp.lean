@@ -62,23 +62,25 @@ instance: Sexpable UInt64 where
 instance: Sexpable Float where
   toSexp := .double
 
-def Sexp.fromName (n : Lean.Name) : Sexp := constr "name" [toSexp n.toString]
+def Sexp.fromName (constantsToFullName : Lean.Name → Lean.Name) (n : Lean.Name) : Sexp := constr "name" [toSexp (constantsToFullName n).toString]
 
-instance: Sexpable Lean.Name where
-  toSexp := Sexp.fromName
+def Sexp.fromNameBound (n : Lean.Name) : Sexp := constr "name" [toSexp (n).toString]
 
-def Sexp.fromLevel (lvl : Lean.Level) : Sexp := constr "level" [fromLvl lvl]
+--instance: Sexpable Lean.Name where
+--  toSexp := Sexp.fromName
+
+def Sexp.fromLevel (constantsToFullName : Lean.Name → Lean.Name) (lvl : Lean.Level) : Sexp := constr "level" [fromLvl lvl]
   where
     fromLvl : Lean.Level → Sexp
     | .zero => constr "lzero" []
-    | .succ lvl =>  constr "lsucc" [fromLevel lvl]
-    | .max lvl1 lvl2 => constr "max" [fromLevel lvl1, fromLevel lvl2]
-    | .imax lvl1 lvl2 => constr "imax" [fromLevel lvl1, fromLevel lvl2]
-    | .param nm => toSexp nm
-    | .mvar mv => toSexp mv.name
+    | .succ lvl =>  constr "lsucc" [fromLevel constantsToFullName lvl]
+    | .max lvl1 lvl2 => constr "max" [fromLevel constantsToFullName lvl1, fromLevel constantsToFullName lvl2]
+    | .imax lvl1 lvl2 => constr "imax" [fromLevel constantsToFullName lvl1, fromLevel constantsToFullName lvl2]
+    | .param nm => Sexp.fromNameBound nm
+    | .mvar mv => Sexp.fromName constantsToFullName mv.name
 
-instance: Sexpable Lean.Level where
-  toSexp := Sexp.fromLevel
+--instance: Sexpable Lean.Level where
+--  toSexp := Sexp.fromLevel
 
 instance: Sexpable Lean.BinderInfo where
   toSexp := fun info =>
@@ -136,7 +138,7 @@ abbrev M := StateM St
 def M.run {α : Type} (r : Lean.HashSet Lean.Expr) (act : M α) : α :=
   StateT.run' (s := { repeated := r}) act
 
-partial def M.convert (e : Lean.Expr) : M Sexp := do
+partial def M.convert (constantsToFullName : Lean.Name → Lean.Name) (e : Lean.Expr) : M Sexp := do
   let st ← get
   match st.index.find? e with
   | .some k => pure $ constr "ref" [toSexp k]
@@ -144,31 +146,31 @@ partial def M.convert (e : Lean.Expr) : M Sexp := do
     let s ←
       match e with
       | .bvar k => pure $ constr "var" [toSexp k]
-      | .fvar fv => pure $ constr "fvar" [toSexp fv.name]
-      | .mvar mvarId => pure $ constr "meta" [toSexp mvarId.name]
-      | .sort u => pure $ constr "sort" [toSexp u]
-      | .const declName us => pure $ constr "const" $ toSexp declName :: us.map toSexp
+      | .fvar fv => pure $ constr "fvar" [Sexp.fromName constantsToFullName fv.name]
+      | .mvar mvarId => pure $ constr "meta" [Sexp.fromName constantsToFullName mvarId.name]
+      | .sort u => pure $ constr "sort" [Sexp.fromLevel constantsToFullName u]
+      | .const declName us => pure $ constr "const" $ (Sexp.fromName constantsToFullName declName) :: us.map (Sexp.fromLevel constantsToFullName)
       | .app _ _ =>
         let lst ← getSpine e
         pure $ constr "apply" lst.reverse
       | .lam _ binderType body _ =>
-        let s1 ← convert binderType
-        let s2 ← convert body
+        let s1 ← convert constantsToFullName binderType
+        let s2 ← convert constantsToFullName body
         pure $ constr "lambda" [s1, s2]
       | .forallE _ binderType body _ =>
-        let s1 ← convert binderType
-        let s2 ← convert body
+        let s1 ← convert constantsToFullName binderType
+        let s2 ← convert constantsToFullName body
         pure $ constr "pi" [s1, s2]
       | .letE _ type value body _ =>
-        let s1 ← convert type
-        let s2 ← convert value
-        let s3 ← convert body
+        let s1 ← convert constantsToFullName type
+        let s2 ← convert constantsToFullName value
+        let s3 ← convert constantsToFullName body
         pure $ constr "let" [s1, s2, s3]
       | .lit l => pure $ toSexp l
-      | .mdata _ expr => convert expr
+      | .mdata _ expr => convert constantsToFullName expr
       | .proj typeName idx struct =>
-        let s ← convert struct
-        pure $ constr "proj" [toSexp typeName, toSexp idx, s]
+        let s ← convert constantsToFullName struct
+        pure $ constr "proj" [toSexp idx, Sexp.fromName constantsToFullName typeName, s]
     if (← get).repeated.contains e then
       let st ← get
       let r := st.nodes.length
@@ -179,20 +181,20 @@ partial def M.convert (e : Lean.Expr) : M Sexp := do
         match e with
         | .app e1 e2 =>
           let ss1 ← getSpine e1
-          let s2 ← convert e2
+          let s2 ← convert constantsToFullName e2
           pure $ s2 :: ss1
         | e =>
-          let s ← convert e
+          let s ← convert constantsToFullName e
           pure [s]
 
-partial def Sexp.fromExpr (e : Lean.Expr) : Sexp :=
+partial def Sexp.fromExpr (constantsToFullName : Lean.Name → Lean.Name) (e : Lean.Expr) : Sexp :=
   M.run (repeated e) do
-    let s ← M.convert e
+    let s ← M.convert constantsToFullName e
     let st ← get
     pure $ st.nodes.foldl (fun t (k, n) => constr "node" [toSexp k, n, t]) s
 
 -- collect all the names references by an expression
-def collectRefs (e : Lean.Expr) : List Lean.Name :=
+def collectRefs (constantsToFullName : Lean.Name → Lean.Name) (e : Lean.Expr) : List Lean.Name :=
   let (_, ns) := collect {} {} e
   ns
   where collect (seen : Lean.HashSet Lean.Expr) (ns : List Lean.Name) (e : Lean.Expr)
@@ -224,8 +226,8 @@ def collectRefs (e : Lean.Expr) : List Lean.Name :=
       | .mdata _ expr => collect seen ns expr
       | .proj _ _ struct => collect seen ns struct
 
-def Sexp.fromExprRefs (e : Lean.Expr) : Sexp :=
-  constr "references" $ (collectRefs e).map toSexp
+def Sexp.fromExprRefs (constantsToFullName : Lean.Name → Lean.Name) (e : Lean.Expr) : Sexp :=
+  constr "references" $ (collectRefs constantsToFullName e).map (Sexp.fromName constantsToFullName)
 
 -- instance: Sexpable Lean.Expr where
 --   toSexp := Sexp.fromExpr
@@ -238,25 +240,144 @@ instance: Sexpable Lean.QuotKind where
   | .lift => constr "lift" []
   | .ind  => constr "ind" []
 
-def Sexp.constantInfo (exprCollect : Lean.Expr → Sexp) (info : Lean.ConstantInfo) : Sexp :=
-    constr "entry" [toSexp info.name, exprCollect info.type, theDef info]
+def Sexp.constantInfo (constantsToFullName : Lean.Name → Lean.Name) (exprCollect : Lean.Expr → Sexp) (info : Lean.ConstantInfo) : Sexp :=
+    constr "entry" [(Sexp.fromName constantsToFullName info.name), exprCollect info.type, theDef info]
     where theDef : Lean.ConstantInfo → Sexp := fun info =>
       match info with
       | .axiomInfo _ => constr "axiom" []
       | .defnInfo val => constr "function" [exprCollect val.value]
       | .thmInfo val => constr "theorem" [exprCollect val.value]
       | .opaqueInfo val => constr "abstract" [exprCollect val.value]
-      | .quotInfo val => constr "quot-info" [toSexp val.kind, toSexp val.name, exprCollect val.type]
-      | .inductInfo val => constr "data" $ exprCollect val.type :: val.ctors.map toSexp
-      | .ctorInfo val => constr "constructor" [toSexp val.induct]
+      | .quotInfo val => constr "quot-info" [toSexp val.kind, Sexp.fromName constantsToFullName val.name, exprCollect val.type]
+      | .inductInfo val => constr "data" $ exprCollect val.type :: val.ctors.map (Sexp.fromName constantsToFullName)
+      | .ctorInfo val => constr "constructor" [Sexp.fromName constantsToFullName val.induct]
       | .recInfo val => constr "recursor" [exprCollect val.type]
 
-def Sexp.fromModuleData (refsOnly : Bool) (nm : Lean.Name) (data : Lean.ModuleData) : Sexp :=
-  let lst := data.constants.toList.filter keepEntry
-  let moduleBody := lst.map (constantInfo $ if refsOnly then fromExprRefs else fromExpr)
-  constr "module" $ constr "module-name" [toSexp nm] :: moduleBody
+structure entryRecord where
+  entryName : Lean.Name
+  entrySexp : Sexp
+
+def Sexp.fromModuleData (constantsToFullName : Lean.Name → Lean.Name) (refsOnly : Bool) (data : Lean.ModuleData) : List entryRecord :=
+  let lst := data.constants.toList.filter keepEntry -- list of constants
+  let moduleBody := lst.map (fun s ↦ entryRecord.mk (constantsToFullName s.name) (((constantInfo constantsToFullName)$ if refsOnly then fromExprRefs constantsToFullName else fromExpr constantsToFullName) s))
+  moduleBody
+  --constr "module" $ constr "module-name" [toSexp nm] :: moduleBody
   where keepEntry (info : Lean.ConstantInfo) : Bool :=
     match info.name with
     | .anonymous => true
     | .str _ _ => ! info.name.isInternal
     | .num _ _ => true
+
+open Lean
+open Lean.Elab
+open Lean.Elab.Command
+
+unsafe def getConstantsToFullName (nameToModuleId : Lean.Name → Option ModuleIdx) (importedModuleNames : Array Name) (constantName : Name) : Name :=
+  match nameToModuleId constantName with
+  | some a =>
+    importedModuleNames[a.toNat]!.append constantName
+  | none => panic! s!"Module ID not found for constant: {constantName}"
+
+def isAlnum (c : Char) : Bool :=
+  c.isAlpha || c.isDigit || c == '_' || c == '-'
+
+def cleanString (s : String) : String :=
+  s.foldl (fun acc c => if isAlnum c then acc.push c else acc) ""
+
+def nameToSexpFileName (unique_id : Nat) (n : Name) : String :=
+  toString unique_id ++ ".sexp"
+  --let rec aux : Name → List String
+  --  | Name.anonymous => []
+  --  | Name.str p s => aux p ++ [cleanString s]
+  --  | Name.num p n => aux p ++ [toString n]
+  --let nameParts := aux n
+  --let joinedName := String.intercalate "_" nameParts
+  --joinedName ++ "_" ++ toString unique_id ++ ".sexp"
+
+unsafe def writeEntry (unique_id : Nat) (overwrite : Bool) (entry: entryRecord): IO Nat := do
+  let outFile := System.FilePath.mk ("sexp/" ++ (nameToSexpFileName unique_id entry.entryName))
+  --IO.println s!"Trying to check existence of file {outFile}."
+  let outMetaData ← outFile.metadata.toBaseIO
+  let proceed : Bool :=
+    match outMetaData with
+    | .error _ => true
+    | .ok _ => panic! s!"File {outFile} already exists"
+  if proceed then
+    --IO.println s!"Opened {outFile}. Trying to write entry {entry.entryName}..."
+    IO.FS.withFile outFile .write (fun fh => Sexp.write fh entry.entrySexp)
+    --IO.println s!"Successfully written entry {entry.entryName} to file {outFile}."
+    pure (unique_id+1)
+  else
+    panic! s!"File {outFile} for entry {entry.entryName} already exists or something went wrong."
+    ----IO.println s!"File {outFile} already exists or something went wrong"
+
+unsafe def processRegularFile (unique_id : Nat)(overwrite : Bool := false) (moduleName : Lean.Name) : IO Nat := do
+  IO.println s!"Trying to process {moduleName}"
+  let env ← importModules #[Import.mk moduleName false] {}
+  --IO.println s!"Opened {moduleName}"
+  let nameToModuleId := env.getModuleIdxFor?
+  let importedModuleNames := env.header.moduleNames
+  let constantsToFullName := getConstantsToFullName nameToModuleId importedModuleNames
+  let modulesData := env.header.moduleData
+  let mainModuleData := modulesData[modulesData.size - 1]!
+  let entries := Sexp.fromModuleData constantsToFullName false mainModuleData
+  --IO.println s!"Trying to write entries for {moduleName}"
+  let mut cur_unique_id := unique_id
+  for entry in entries do
+    ----IO.println s!"{cur_unique_id}"
+    cur_unique_id ← writeEntry cur_unique_id overwrite entry
+  --IO.println s!"Written entries for {moduleName}"
+  Environment.freeRegions env
+  pure cur_unique_id
+
+  --let outMetaData ← outFile.metadata.toBaseIO
+  --let proceed : Bool :=
+  --  match outMetaData with
+  --  | .error _ => true
+  --  | .ok _ => overwrite
+--
+  --if proceed then
+  --  --IO.println s!"Processing {moduleName}"
+--
+  --  let env ← importModules #[Import.mk moduleName false] {}
+  --  let nameToModuleId := env.getModuleIdxFor?
+  --  let importedModuleNames := env.header.moduleNames
+  --  let constantsToFullName := getConstantsToFullName nameToModuleId importedModuleNames
+  --  let modulesData := env.header.moduleData
+  --  let mainModuleData := modulesData[modulesData.size - 1]!
+  --  let sexpConstruct := (Sexp.fromModuleData constantsToFullName false mainModuleData)
+  --  sexpConstruct.map (fun ⟨entryName, entrySexp ⟩ ↦ IO.FS.withFile outFile .write (fun fh => Sexp.write fh sexpConstruct))
+--
+  --  Environment.freeRegions env
+  --else
+  --  --IO.println s!"Skipping {moduleName}"
+
+unsafe def recursivelyProcessDirectory (unique_id : Nat) (curName : Name)(dir : System.FilePath): IO Nat := do
+  --IO.println s!"Searching files in source directory {dir}..."
+  let mut entries ← dir.readDir
+  let mut cur_unique_id := unique_id
+  for entry in entries do
+    if (← entry.path.isDir) then
+      -- is dir
+      let newCurName := Name.str curName entry.fileName
+      --IO.println s!"Going into directory {newCurName}"
+      cur_unique_id ← recursivelyProcessDirectory cur_unique_id newCurName entry.path
+    else
+      -- is regular file
+      ----IO.println s!"Processing {entry.path}"
+      if (toString entry.fileName).endsWith ".lean" then
+        match entry.path.fileStem with
+        | some baseName =>
+          let moduleName := Name.str curName baseName
+          --let outFile := System.FilePath.mk ("sexp/" ++(nameToSexpFileName moduleName))
+          cur_unique_id ← processRegularFile cur_unique_id false moduleName
+        | none => panic! "This should be impossible."
+  pure cur_unique_id
+
+unsafe def main (args : List String) : IO Unit := do
+  IO.println "Starting..."
+  match args with
+  | dir :: [] => let _ ← recursivelyProcessDirectory 0 (Name.str Name.anonymous dir) dir
+  | _ => panic! "Incorrect use of arguments. Input is only the directory."
+
+--#eval main ["Mathlib"]
