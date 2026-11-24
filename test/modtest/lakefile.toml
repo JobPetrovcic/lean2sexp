@@ -1,0 +1,5 @@
+name = "modtest"
+defaultTargets = ["ModTest"]
+
+[[lean_lib]]
+name = "ModTest"
