@@ -2,6 +2,24 @@
 
 This utility converts compiled Lean 4 modules to the [S-expression](https://en.wikipedia.org/wiki/S-expression) format: for every declaration an `(:entry (:name "...") <type> <body>)` with module-qualified constant names. These can be used for further processing, e.g. to build the dependency graph of a library or for machine-learning purposes.
 
+## Quick start: dependency graph of a library
+
+```
+cd lean2sexp && lake build                 # lean-toolchain must match the target project
+cd my-project && lake exe cache get        # or lake build: the .olean files must exist
+lake env path/to/lean2sexp/.lake/build/bin/lean2sexp --refs-only -o deps src/MyLib
+```
+
+Each line of `deps/<Module>.sexp` is one declaration with the names it uses in its type and in its body/proof:
+
+```
+(:entry (:name "Mathlib.Init.linter.nightlyRegressionSet")
+        (:references (:name "Init.Prelude.Bool") ...)              ; type
+        (:abstract (:references (:name "Init.Prelude.Bool") ...)))  ; body
+```
+
+Use `--refs-only` for graphs: full output contains complete proof terms and is huge (riemann-hypothesis: 11 GB and 1.5 min with `--refs-only` vs 420 GB and 32 min without, at `-j 24`). Memory stays at ~1 GB (`--refs-only`) to a few GB (full), so `-j` only trades speed for memory; on a laptop use the default or a smaller `-j`.
+
 ## Building
 
 ```
@@ -40,7 +58,7 @@ The output does not depend on `--jobs` or on which modules are being converted: 
 
 ### Memory and speed
 
-The whole library is imported once (`importModules` mmaps the `.olean` files). Measured on Lean core `Init`, Mathlib, and riemann-hypothesis + Mathlib (71k modules): the import takes 0.6 s, 16 s and 15 s, and uses 0.4, 1.7 and 2.3 GB of anonymous memory. The rest of the resident memory reported by the OS is file-backed `.olean` pages that the kernel can evict, so the tool works on a small machine; it is CPU-bound and scales with `--jobs` (modules are converted independently).
+The whole library is imported once (`importModules` mmaps the `.olean` files). Measured on Lean core `Init`, Mathlib, and riemann-hypothesis + Mathlib (71k modules): the import takes 0.6 s, 16 s and 15 s, and uses 0.4, 1.7 and 2.3 GB of anonymous memory. The rest of the resident memory reported by the OS is file-backed `.olean` pages that the kernel can evict, so the tool works on a small machine. It scales with `--jobs` (modules are converted independently) until disk writes dominate, which happens for full output of very large libraries.
 
 ## Checks
 
