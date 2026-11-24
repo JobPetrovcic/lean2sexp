@@ -57,7 +57,7 @@ instance: Sexpable Nat where
   toSexp := fun n => .integer ↑n
 
 instance: Sexpable UInt64 where
-  toSexp := fun k => .integer ↑k.val
+  toSexp := fun k => .integer ↑k.toNat
 
 instance: Sexpable Float where
   toSexp := .double
@@ -97,10 +97,10 @@ instance: Sexpable Lean.Literal where
     | .strVal val => constr "literal" [toSexp val]
 
 -- subexpressions that repeat
-def repeated (e : Lean.Expr) : Lean.HashSet Lean.Expr :=
-  (collect .empty e).fold (fun s e k => if k < 2 then s else s.insert e) .empty
-  where collect (seen : Lean.HashMap Lean.Expr Nat) (e : Lean.Expr) : Lean.HashMap Lean.Expr Nat :=
-    match seen.find? e with
+def repeated (e : Lean.Expr) : Std.HashSet Lean.Expr :=
+  (collect {} e).fold (fun s e k => if k < 2 then s else s.insert e) {}
+  where collect (seen : Std.HashMap Lean.Expr Nat) (e : Lean.Expr) : Std.HashMap Lean.Expr Nat :=
+    match seen.get? e with
     | .some k =>
       -- seen before, no need to descend into subexpressions (this avoids exponential blowup)
       seen.insert e (k + 1)
@@ -129,18 +129,18 @@ def repeated (e : Lean.Expr) : Lean.HashSet Lean.Expr :=
 
 -- auxiliary function, the workhorse
 structure St where
-  repeated : Lean.HashSet Lean.Expr -- the expressions that are repeated
-  index : Lean.HashMap Lean.Expr Nat := {} -- the index by which we refer to an expression
+  repeated : Std.HashSet Lean.Expr -- the expressions that are repeated
+  index : Std.HashMap Lean.Expr Nat := {} -- the index by which we refer to an expression
   nodes : List (Nat × Sexp) := [] -- the nodes
 
 abbrev M := StateM St
 
-def M.run {α : Type} (r : Lean.HashSet Lean.Expr) (act : M α) : α :=
+def M.run {α : Type} (r : Std.HashSet Lean.Expr) (act : M α) : α :=
   StateT.run' (s := { repeated := r}) act
 
 partial def M.convert (constantsToFullName : Lean.Name → Lean.Name) (e : Lean.Expr) : M Sexp := do
   let st ← get
-  match st.index.find? e with
+  match st.index.get? e with
   | .some k => pure $ constr "ref" [toSexp k]
   | .none =>
     let s ←
@@ -197,8 +197,8 @@ partial def Sexp.fromExpr (constantsToFullName : Lean.Name → Lean.Name) (e : L
 def collectRefs (constantsToFullName : Lean.Name → Lean.Name) (e : Lean.Expr) : List Lean.Name :=
   let (_, ns) := collect {} {} e
   ns
-  where collect (seen : Lean.HashSet Lean.Expr) (ns : List Lean.Name) (e : Lean.Expr)
-    : Lean.HashSet Lean.Expr × List Lean.Name :=
+  where collect (seen : Std.HashSet Lean.Expr) (ns : List Lean.Name) (e : Lean.Expr)
+    : Std.HashSet Lean.Expr × List Lean.Name :=
     if seen.contains e then
       (seen, ns)
     else
@@ -313,7 +313,8 @@ unsafe def writeEntry (unique_id : Nat) (overwrite : Bool) (entry: entryRecord):
 
 unsafe def processRegularFile (unique_id : Nat)(overwrite : Bool := false) (moduleName : Lean.Name) : IO Nat := do
   IO.println s!"Trying to process {moduleName}"
-  let env ← importModules #[Import.mk moduleName false] {}
+  -- importAll: with the module system, proofs live in the .olean.private part
+  let env ← importModules #[{ module := moduleName, importAll := true }] {}
   --IO.println s!"Opened {moduleName}"
   let nameToModuleId := env.getModuleIdxFor?
   let importedModuleNames := env.header.moduleNames
@@ -376,6 +377,8 @@ unsafe def recursivelyProcessDirectory (unique_id : Nat) (curName : Name)(dir : 
 
 unsafe def main (args : List String) : IO Unit := do
   IO.println "Starting..."
+  -- find the core library and everything on LEAN_PATH (e.g. when run via `lake env`)
+  initSearchPath (← findSysroot)
   match args with
   | dir :: [] => let _ ← recursivelyProcessDirectory 0 (Name.str Name.anonymous dir) dir
   | _ => panic! "Incorrect use of arguments. Input is only the directory."
