@@ -29,11 +29,29 @@ A directory `D` stands for the modules `D.*` below it, so pass the root of a lib
   --force            rewrite outputs that are up to date
 ```
 
-Each module goes to its own file, e.g. `sexp/Init/Data/List/Basic.sexp`, with one `(:entry ...)` per declaration per line. Names are module-qualified, as in `Init.Prelude.Nat.add`. A line of `--refs-only` output looks like this:
+Each module goes to its own file, e.g. `sexp/Init/Data/List/Basic.sexp`, with one `(:entry ...)` per declaration per line. Every name comes with its module, as in `(:name "Nat.add" "Init.Prelude")`. A line of `--refs-only` output looks like this:
 
 ```
-(:entry (:name "Mathlib.Init.linter.nightlyRegressionSet") (:references (:name "Init.Prelude.Bool") ...) (:abstract (:references ...)))
+(:entry (:name "linter.nightlyRegressionSet" "Mathlib.Init") (:references (:name "Bool" "Init.Prelude") ...) (:abstract (:references ...)))
 ```
+
+### Format
+
+```
+ENTRY ::= (:entry NAME E KIND)                  E = the declaration's type
+NAME  ::= (:name "constant" "module")
+KIND  ::= (:theorem E) | (:function E) | (:abstract E)       proof / body / opaque value
+        | (:axiom) | (:recursor E) | (:data E NAME*)         recursor: its type; data: type, constructors
+        | (:constructor NAME) | (:quot-info (:type|:ctor|:lift|:ind) NAME E)
+E     ::= (:references NAME*)                                   with --refs-only: the constants used
+        | (:const NAME LEVEL*) | (:apply E E+) | (:lambda E E) | (:pi E E)   binder type, body
+        | (:let E E E) | (:var i) | (:literal n|"s") | (:sort LEVEL)       let: type, value, body; var: de Bruijn index
+        | (:proj i NAME E) | (:fvar NAME) | (:meta NAME)
+        | (:node k E E) | (:ref k)              (:node k S B): (:ref k) in B (and in later nodes) stands for S
+LEVEL ::= (:level (:lzero) | (:lsucc LEVEL) | (:max LEVEL LEVEL) | (:imax LEVEL LEVEL) | (:name "u"))
+```
+
+With `--json`, `(:tag a b)` is `["tag", a, b]`.
 
 Use `--refs-only` for dependency graphs: full output contains whole proof terms and is huge (420 GB instead of 11 GB for the riemann-hypothesis formalization).
 With `--json` every line is a JSON value, so the output loads with any JSON library.
