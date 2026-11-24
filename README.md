@@ -42,10 +42,3 @@ Internal declarations are kept by default so that no reference dangles.
 Modules whose output is up to date are skipped, so a killed run can simply be restarted. Use a fresh `-o` directory (or `--force`) when changing options.
 
 `test/run.sh` and `scripts/compare-sexp.py` check the output.
-
-## Background
-
-The utility is fashioned after a similar Agda backend, implemented in the
-[`ast-dump` branch of this Agda fork](https://github.com/andrejbauer/agda/tree/ast-dump), see
-[`src/full/Agda/Interaction/Highlighting/Sexp`](https://github.com/andrejbauer/agda/tree/ast-dump/src/full/Agda/Interaction/Highlighting/Sexp)
-therein.
