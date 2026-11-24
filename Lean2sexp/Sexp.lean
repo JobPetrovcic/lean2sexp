@@ -36,6 +36,22 @@ partial def Sexp.write (fh : IO.FS.Handle) : Sexp → IO Unit
         fh.putStr " "
         writeList ss
 
+/-- Writes the same tree as JSON: a list `(:tag a b ...)` becomes `["tag", a, b, ...]`
+(the only atoms are such `:tag` keywords). -/
+partial def Sexp.writeJson (fh : IO.FS.Handle) : Sexp → IO Unit
+  | .atom s => fh.putStr ("\"" ++ Lean.Json.escape (s.dropWhile (· == ':')).toString ++ "\"")
+  | .string s => fh.putStr ("\"" ++ Lean.Json.escape s ++ "\"")
+  | .integer k => fh.putStr $ ToString.toString k
+  | .double x => fh.putStr $ ToString.toString x
+  | .cons lst => do
+      fh.putStr "["
+      let mut first := true
+      for s in lst do
+        unless first do fh.putStr ","
+        first := false
+        writeJson fh s
+      fh.putStr "]"
+
 instance: ToString Sexp where
   toString := Sexp.toString
 
@@ -299,12 +315,14 @@ structure Config where
   jobs : Nat := 0
   refsOnly : Bool := false
   skipInternal : Bool := false
+  json : Bool := false
   force : Bool := false
 
 def usage : String := "usage: lean2sexp [options] <dir-or-file>...
 
 Converts compiled Lean modules to s-expressions, one file per module:
-<out>/<Module>/<Path>.sexp, one (:entry ...) per declaration per line.
+module Init.Data.List.Basic goes to <out>/Init/Data/List/Basic.sexp,
+one (:entry ...) per declaration per line.
 A directory D names the modules D.* found as .lean files below it (so pass the
 root of a library, e.g. `.lake/packages/mathlib/Mathlib`); a file M.lean names
 the top-level module M. The .olean files must be on the search path, so run
@@ -315,6 +333,7 @@ the tool through `lake env` from the project that built them.
   --refs-only        write (:references ...) lists instead of full expression trees
   --skip-internal    skip declarations with an `_` name component (private, aux);
                      by default they are kept so that no reference dangles
+  --json             write JSON Lines (.jsonl): (:tag a b) becomes [\"tag\",a,b]
   --force            rewrite outputs that are up to date
   -h, --help         show this help
 
@@ -333,6 +352,7 @@ def parseArgs : List String → Config → Except String Config
     | none => .error s!"--jobs: expected a number, got '{n}'"
   | "--refs-only" :: rest, o => parseArgs rest { o with refsOnly := true }
   | "--skip-internal" :: rest, o => parseArgs rest { o with skipInternal := true }
+  | "--json" :: rest, o => parseArgs rest { o with json := true }
   | "--force" :: rest, o => parseArgs rest { o with force := true }
   | arg :: rest, o =>
     if arg.startsWith "-" then .error s!"unknown option '{arg}'"
@@ -393,7 +413,8 @@ def writeModule (env : Environment) (modOf : Std.HashMap Name Name) (opts : Conf
     let mut n := 0
     for info in data.constants do
       if opts.skipInternal && !keepEntry info then continue
-      (Sexp.constantInfo fullName exprConv info).write fh
+      let e := Sexp.constantInfo fullName exprConv info
+      if opts.json then e.writeJson fh else e.write fh
       fh.putStr "\n"
       n := n + 1
     return n
@@ -443,7 +464,7 @@ unsafe def main (args : List String) : IO UInt32 := do
       catch _ => pure none
     let some olean := olean? | IO.eprintln s!"warning: {mod}: no .olean, skipping"; continue
     built := built.push mod
-    let out := modToFilePath opts.outDir mod "sexp"
+    let out := modToFilePath opts.outDir mod (if opts.json then "jsonl" else "sexp")
     if opts.force || !(← upToDate out olean) then
       work := work.push (mod, out)
   IO.println s!"{built.size} modules, {built.size - work.size} up to date, {work.size} to convert on {jobs} threads"
