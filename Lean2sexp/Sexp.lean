@@ -436,11 +436,12 @@ unsafe def main (args : List String) : IO UInt32 := do
   let mut built : Array Name := #[]
   let mut work : Array (Name × System.FilePath) := #[]
   for mod in mods do
-    let olean? ← try some <$> findOLean mod catch _ => pure none
+    -- `findOLean` throws when no search path entry has the module's root at all
+    let olean? ← try
+        let olean ← findOLean mod
+        pure (if (← olean.pathExists) then some olean else none)
+      catch _ => pure none
     let some olean := olean? | IO.eprintln s!"warning: {mod}: no .olean, skipping"; continue
-    if !(← olean.pathExists) then
-      IO.eprintln s!"warning: {mod}: no .olean, skipping"
-      continue
     built := built.push mod
     let out := modToFilePath opts.outDir mod "sexp"
     if opts.force || !(← upToDate out olean) then
