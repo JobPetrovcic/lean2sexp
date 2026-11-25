@@ -38,7 +38,7 @@ Each module goes to its own file, e.g. `sexp/Init/Data/List/Basic.sexp`, with on
 ### Format
 
 ```
-ENTRY ::= (:entry NAME E KIND)                  E = the declaration's type
+ENTRY ::= (:entry NAME E KIND RANGE?)           E = the declaration's type
 NAME  ::= (:name "constant" "module")
 KIND  ::= (:theorem E) | (:function E) | (:abstract E)       proof / body / opaque value
         | (:axiom) | (:recursor E) | (:data E NAME*)         recursor: its type; data: type, constructors
@@ -48,6 +48,7 @@ E     ::= (:references NAME*)                                   with --refs-only
         | (:let E E E) | (:var i) | (:literal n|"s") | (:sort LEVEL)       let: type, value, body; var: de Bruijn index
         | (:proj i NAME E) | (:fvar NAME) | (:meta NAME)
         | (:node k E E) | (:ref k)              (:node k S B): (:ref k) in B (and in later nodes) stands for S
+RANGE ::= (:range line col end-line end-col)    position in the module's .lean file (lines from 1)
 LEVEL ::= (:level (:lzero) | (:lsucc LEVEL) | (:max LEVEL LEVEL) | (:imax LEVEL LEVEL) | (:name "u"))
 ```
 

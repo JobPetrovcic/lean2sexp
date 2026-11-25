@@ -21,6 +21,7 @@ checkno() {
 A=out/ModTest/A.sexp B=out/ModTest/B.sexp
 [ -f out/ModTest.sexp ] && [ ! -s out/ModTest.sexp ] && echo "ok   module without declarations gives an empty file" || { echo "FAIL empty module"; fail=1; }
 check "def body is present" $A '^\(:entry \(:name "double" "ModTest.A"\) .* \(:function \(:'
+check "def has its source range" $A '^\(:entry \(:name "double" "ModTest.A"\) .* \(:range 3 0 3 42\)\)$'
 check "private theorem is present, module-qualified" $A '^\(:entry \(:name "_private.ModTest.A.0.double_eq_aux" "ModTest.A"\) '
 # a non-`public` declaration of a `module` is name-mangled like a `private` one
 check "non-public theorem has its proof" $A '^\(:entry \(:name "_private.ModTest.A.0.double_eq_internal" "ModTest.A"\) .* \(:theorem \(:'

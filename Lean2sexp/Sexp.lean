@@ -324,7 +324,8 @@ def usage : String := "usage: lean2sexp [options] <dir-or-file>...
 
 Converts compiled Lean modules to s-expressions, one file per module:
 module Init.Data.List.Basic goes to <out>/Init/Data/List/Basic.sexp,
-one (:entry ...) per declaration per line.
+one (:entry ...) per declaration per line, ending with its source
+(:range line col end-line end-col) when Lean recorded one.
 A directory D names the modules D.* found as .lean files below it (so pass the
 root of a library, e.g. `.lake/packages/mathlib/Mathlib`); a file M.lean names
 the top-level module M. The .olean files must be on the search path, so run
@@ -415,7 +416,11 @@ def writeModule (env : Environment) (modOf : Std.HashMap Name Name) (opts : Conf
     let mut n := 0
     for info in data.constants do
       if opts.skipInternal && !keepEntry info then continue
-      let e := Sexp.constantInfo fullName exprConv info
+      let mut e := Sexp.constantInfo fullName exprConv info
+      -- (:range line col end-line end-col) of the declaration's source, when Lean recorded it
+      if let (.cons l, some r) := (e, declRangeExt.find? env info.name) then
+        e := .cons (l ++ [constr "range" [toSexp r.range.pos.line, toSexp r.range.pos.column,
+                                          toSexp r.range.endPos.line, toSexp r.range.endPos.column]])
       if opts.json then e.writeJson fh else e.write fh
       fh.putStr "\n"
       n := n + 1
